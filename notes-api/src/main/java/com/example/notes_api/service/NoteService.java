@@ -3,19 +3,38 @@ package com.example.notes_api.service;
 import com.example.notes_api.domain.Note;
 import com.example.notes_api.repository.NoteRepository;
 import org.springframework.stereotype.Service;
+import java.util.List;
 
 @Service
 public class NoteService {
+    private final NoteRepository noteRepository;
 
-    private final NoteRepository noteRepository;   // 依赖的是「接口」,不是实现
-
-    public NoteService(NoteRepository noteRepository) {   // 构造器注入
+    public NoteService(NoteRepository noteRepository) {
         this.noteRepository = noteRepository;
+    }
+
+    public List<Note> list() {
+        return noteRepository.findAll();
     }
 
     public Note getById(Long id) {
         return noteRepository.findById(id)
-                .orElseThrow(() ->                       // Day4 换成自定义异常+全局处理
-                        new RuntimeException("Note not found: " + id));
+                .orElseThrow(() -> new RuntimeException("Note not found: " + id));
+    }
+
+    public Note create(String title, String content) {
+        Note note = new Note(null, title, content);
+        return noteRepository.save(note);
+    }
+
+    public Note update(Long id, String title, String content) {
+        Note note = getById(id);
+        note.setTitle(title);
+        note.setContent(content);
+        return noteRepository.save(note);
+    }
+
+    public void delete(Long id) {
+        noteRepository.deleteById(id);
     }
 }
