@@ -23,7 +23,7 @@ public class NoteService {
     }
 
     public Note create(String title, String content) {
-        Note note = new Note(null, title, content);
+        Note note = new Note(title, content);
         return noteRepository.save(note);
     }
 
