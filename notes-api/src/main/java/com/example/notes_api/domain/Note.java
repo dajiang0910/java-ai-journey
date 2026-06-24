@@ -1,10 +1,13 @@
 package com.example.notes_api.domain;
 
+import com.baomidou.mybatisplus.annotation.TableId;
+import com.baomidou.mybatisplus.annotation.TableName;
 import jakarta.persistence.*;
 import java.time.LocalDateTime;
 
 @Entity
 @Table(name = "notes")
+@TableName("notes")  // MyBatis-Plus 注解，两种 ORM 共存
 public class Note {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)

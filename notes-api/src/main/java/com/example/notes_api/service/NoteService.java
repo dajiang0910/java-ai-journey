@@ -2,6 +2,8 @@ package com.example.notes_api.service;
 
 import com.example.notes_api.domain.Note;
 import com.example.notes_api.repository.NoteRepository;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import java.util.List;
 
@@ -36,5 +38,9 @@ public class NoteService {
 
     public void delete(Long id) {
         noteRepository.deleteById(id);
+    }
+
+    public Page<Note> list(int page, int size) {
+        return noteRepository.findAll(PageRequest.of(page, size));
     }
 }
