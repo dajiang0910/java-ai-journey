@@ -1,9 +1,11 @@
 package com.example.notes_api.service;
 
 import com.example.notes_api.domain.Note;
+import com.example.notes_api.exception.BusinessException;
 import com.example.notes_api.repository.NoteRepository;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import java.util.List;
 
@@ -21,7 +23,8 @@ public class NoteService {
 
     public Note getById(Long id) {
         return noteRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Note not found: " + id));
+                .orElseThrow(() -> new BusinessException(
+                        HttpStatus.NOT_FOUND, "笔记不存在: " + id));
     }
 
     public Note create(String title, String content) {

@@ -1,8 +1,8 @@
 package com.example.notes_api.service;
 
 import com.example.notes_api.domain.Note;
+import com.example.notes_api.exception.BusinessException;
 import com.example.notes_api.repository.NoteRepository;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -68,15 +68,16 @@ class NoteServiceTest {
     }
 
     @Test
-    @DisplayName("getById() 不存在时应抛异常")
-    void getById_whenNotExists_shouldThrowException() {
+    @DisplayName("getById() 不存在时应抛 BusinessException")
+    void getById_whenNotExists_shouldThrowBusinessException() {
         // given：findById 返回空
         when(noteRepository.findById(999L)).thenReturn(Optional.empty());
 
-        // when & then：调用应该抛异常
-        RuntimeException ex = assertThrows(RuntimeException.class,
+        // when & then：调用应该抛 BusinessException，且状态码 404
+        BusinessException ex = assertThrows(BusinessException.class,
                 () -> noteService.getById(999L));
         assertTrue(ex.getMessage().contains("999"));
+        assertEquals(404, ex.getStatus().value());
     }
 
     // ========== create() 测试 ==========

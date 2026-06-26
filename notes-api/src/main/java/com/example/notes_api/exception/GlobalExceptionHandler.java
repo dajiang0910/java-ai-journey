@@ -1,4 +1,5 @@
 package com.example.notes_api.exception;
+
 import com.example.notes_api.dto.ApiResponse;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -8,7 +9,7 @@ import java.util.stream.Collectors;
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
-    // 处理 Bean Validation 失败
+    // 处理 Bean Validation 失败（@Valid 校验不通过）
     @ExceptionHandler(MethodArgumentNotValidException.class)
     @ResponseStatus(HttpStatus.BAD_REQUEST)
     public ApiResponse<Void> handleValidation(MethodArgumentNotValidException e) {
@@ -18,10 +19,16 @@ public class GlobalExceptionHandler {
         return ApiResponse.error(400, msg);
     }
 
-    // 处理业务异常
-    @ExceptionHandler(RuntimeException.class)
-    @ResponseStatus(HttpStatus.NOT_FOUND)
-    public ApiResponse<Void> handleRuntime(RuntimeException e) {
-        return ApiResponse.error(404, e.getMessage());
+    // 处理自定义业务异常（携带精确的 HTTP 状态码）
+    @ExceptionHandler(BusinessException.class)
+    public ApiResponse<Void> handleBusiness(BusinessException e) {
+        return ApiResponse.error(e.getStatus().value(), e.getMessage());
+    }
+
+    // 兜底：未预料到的异常统一返回 500
+    @ExceptionHandler(Exception.class)
+    @ResponseStatus(HttpStatus.INTERNAL_SERVER_ERROR)
+    public ApiResponse<Void> handleUnknown(Exception e) {
+        return ApiResponse.error(500, "服务器内部错误: " + e.getMessage());
     }
 }
