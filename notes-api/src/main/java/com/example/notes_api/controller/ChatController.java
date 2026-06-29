@@ -289,13 +289,31 @@ public class ChatController {
     }
 
     // ================================================================
-    // Week 4 Day 1：结构化提取
+    // Week 4 Day 1：结构化提取（基础版 —— Schema 约束）
     // ================================================================
 
     @PostMapping("/extract/metadata")
-    @Operation(summary = "结构化提取元数据",
-            description = "输入文本，AI 自动提取标题/关键词/分类/难度/摘要，返回结构化 Bean")
+    @Operation(summary = "结构化提取元数据（v1·基础）",
+            description = "输入文本，AI 自动提取标题/关键词/分类/难度/摘要。底层用 .entity(Class) 生成 JSON Schema 约束 LLM 输出")
     public ApiResponse<NoteMetadata> extractMetadata(@Valid @RequestBody ExtractRequest request) {
         return ApiResponse.success(extractService.extract(request.content()));
+    }
+
+    // ================================================================
+    // Week 4 Day 2：结构化提取（增强版 —— Few-shot + 字段描述 + 后校验）
+    // ================================================================
+
+    @PostMapping("/extract/metadata/v2")
+    @Operation(
+            summary = "结构化提取元数据（v2·Few-shot 增强）",
+            description = """
+                    相比 v1 基础版，v2 做了三层增强：
+                    1. Few-shot 范例 —— System Prompt 中嵌入 2 个「输入→期望输出」范例，LLM 照猫画虎
+                    2. @JsonPropertyDescription —— 每个字段有语义描述，写入 JSON Schema
+                    3. 后校验兜底 —— category 枚举校验 + 模糊匹配修正，确保下游消费者拿到干净数据
+                    """
+    )
+    public ApiResponse<NoteMetadata> extractMetadataV2(@Valid @RequestBody ExtractRequest request) {
+        return ApiResponse.success(extractService.extractV2(request.content()));
     }
 }

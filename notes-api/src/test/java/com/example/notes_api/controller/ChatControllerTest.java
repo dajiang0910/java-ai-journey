@@ -258,7 +258,7 @@ class ChatControllerTest {
     }
 
     // ================================================================
-    // Week 4 Day 1: POST /api/extract/metadata —— 结构化提取
+    // Week 4 Day 1: POST /api/extract/metadata —— 结构化提取（v1 基础版）
     // ================================================================
 
     @Test
@@ -299,5 +299,65 @@ class ChatControllerTest {
                                 {"content": ""}
                                 """))
                 .andExpect(status().isBadRequest());
+    }
+
+    // ================================================================
+    // Week 4 Day 2: POST /api/extract/metadata/v2 —— 结构化提取（v2 Few-shot 增强版）
+    // ================================================================
+
+    @Test
+    @DisplayName("POST /api/extract/metadata/v2 应返回增强版结构化 NoteMetadata")
+    void extractMetadataV2_shouldReturnStructuredBean() throws Exception {
+        // v2 返回的 NoteMetadata 与 v1 类型相同，但经过了 Few-shot + 后校验
+        NoteMetadata mockMeta = new NoteMetadata(
+                "Java 21 虚拟线程深度解析",
+                List.of("Java 21", "虚拟线程", "Project Loom", "并发", "JVM"),
+                "技术",
+                "高级",
+                "本文深入解析 Java 21 虚拟线程的设计原理与 Project Loom 实现"
+        );
+        when(extractService.extractV2("Java 21 引入了虚拟线程..."))
+                .thenReturn(mockMeta);
+
+        mockMvc.perform(post("/api/extract/metadata/v2")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"content": "Java 21 引入了虚拟线程..."}
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value(200))
+                .andExpect(jsonPath("$.data.title").value("Java 21 虚拟线程深度解析"))
+                .andExpect(jsonPath("$.data.keywords[0]").value("Java 21"))
+                .andExpect(jsonPath("$.data.keywords[1]").value("虚拟线程"))
+                .andExpect(jsonPath("$.data.keywords[2]").value("Project Loom"))
+                .andExpect(jsonPath("$.data.keywords[3]").value("并发"))
+                .andExpect(jsonPath("$.data.keywords[4]").value("JVM"))
+                .andExpect(jsonPath("$.data.category").value("技术"))
+                .andExpect(jsonPath("$.data.difficulty").value("高级"))
+                .andExpect(jsonPath("$.data.summary").value("本文深入解析 Java 21 虚拟线程的设计原理与 Project Loom 实现"));
+    }
+
+    @Test
+    @DisplayName("POST /api/extract/metadata/v2 后校验应修正非法 category")
+    void extractMetadataV2_shouldFixInvalidCategory() throws Exception {
+        // 模拟：LLM 返回 category="编程"（不在枚举内），v2 的后校验应将其修正为"技术"
+        NoteMetadata fixedMeta = new NoteMetadata(
+                "标题",
+                List.of("关键词1", "关键词2", "关键词3"),
+                "技术",  // ← 已被 validateAndFallback 修正
+                "中级",
+                "摘要内容"
+        );
+        when(extractService.extractV2("某篇技术文章..."))
+                .thenReturn(fixedMeta);
+
+        mockMvc.perform(post("/api/extract/metadata/v2")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"content": "某篇技术文章..."}
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value(200))
+                .andExpect(jsonPath("$.data.category").value("技术"));  // 修正后不是"编程"
     }
 }
