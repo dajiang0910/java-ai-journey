@@ -9,10 +9,14 @@ import com.example.notes_api.service.ChatService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import org.springframework.http.MediaType;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import reactor.core.publisher.Flux;
 
 /**
  * LLM 对话接口。
@@ -97,5 +101,35 @@ public class ChatController {
     public ApiResponse<String> generateSlug(@Valid @RequestBody SlugRequest request) {
         String result = chatService.generateSlug(request.title());
         return ApiResponse.success(result);
+    }
+
+    // ================================================================
+    // Day 3 新增端点：SSE 流式对话
+    // ================================================================
+
+    /**
+     * 流式对话 —— GET /api/chat/stream?message=xxx。
+     * <p>
+     * 这是 Day 3 的核心端点：把 {@code .call()} 替换成 {@code .stream()}，
+     * 返回 {@link Flux}{@code <String>} 并声明 {@link MediaType#TEXT_EVENT_STREAM_VALUE}，
+     * Spring MVC 自动将每个字符串片段包装成 SSE {@code data: ...} 事件。
+     * <p>
+     * 用 curl 测试会更明显看到逐 token 输出效果（浏览器会缓冲）：
+     * <pre>{@code
+     * curl -N "http://localhost:8080/api/chat/stream?message=什么是依赖注入"
+     * }</pre>
+     * 前端使用 {@code EventSource} API：
+     * <pre>{@code
+     * const es = new EventSource("/api/chat/stream?message=你好");
+     * es.onmessage = e => console.log(e.data); // 每收到一个 token 打印一次
+     * }</pre>
+     *
+     * @param message 用户输入的消息（通过 URL 查询参数传递）
+     * @return LLM 回复的文本流（SSE 格式）
+     */
+    @GetMapping(value = "/chat/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    @Operation(summary = "流式对话", description = "SSE 流式返回 LLM 回复，边生成边输出")
+    public Flux<String> streamChat(@RequestParam String message) {
+        return chatService.streamChat(message);
     }
 }

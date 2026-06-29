@@ -3,6 +3,7 @@ package com.example.notes_api.service;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.prompt.PromptTemplate;
 import org.springframework.stereotype.Service;
+import reactor.core.publisher.Flux;
 
 /**
  * LLM 对话服务。
@@ -132,5 +133,33 @@ public class ChatService {
                 .user(template.render())
                 .call()
                 .content();
+    }
+
+    // ================================================================
+    // Day 3 新增方法
+    // ================================================================
+
+    /**
+     * 流式对话 —— 发送消息，LLM 边生成边返回。
+     * <p>
+     * {@code .stream().content()} 返回 {@link Flux}{@code <String>}，
+     * 每个元素是 LLM 生成的一个文本片段（token 级别或更粗粒度）。
+     * <p>
+     * 对比 {@link #chat(String)}：
+     * <ul>
+     *   <li>{@code .call().content()} → {@code String}（同步阻塞，等完整回复）</li>
+     *   <li>{@code .stream().content()} → {@code Flux<String>}（异步非阻塞，边生成边推送）</li>
+     * </ul>
+     * <p>
+     * 适用场景：聊天对话、长篇生成、需要"打字机效果"提升体验的场景。
+     *
+     * @param userMessage 用户输入的消息
+     * @return LLM 回复的文本流，前端逐 token 接收展示
+     */
+    public Flux<String> streamChat(String userMessage) {
+        return chatClient.prompt()
+                .user(userMessage)
+                .stream()       // Day 3 核心：.stream() 替代 .call()
+                .content();     // 返回 Flux<String>，不是 String
     }
 }
