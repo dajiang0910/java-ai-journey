@@ -1,6 +1,7 @@
 package com.example.notes_api.controller;
 
 import com.example.notes_api.dto.ApiResponse;
+import com.example.notes_api.dto.ChatMultiTurnRequest;
 import com.example.notes_api.dto.ChatRequest;
 import com.example.notes_api.dto.SlugRequest;
 import com.example.notes_api.dto.SummarizeRequest;
@@ -131,5 +132,50 @@ public class ChatController {
     @Operation(summary = "流式对话", description = "SSE 流式返回 LLM 回复，边生成边输出")
     public Flux<String> streamChat(@RequestParam String message) {
         return chatService.streamChat(message);
+    }
+
+    // ================================================================
+    // Day 4 新增端点：多轮对话（消息历史）
+    // ================================================================
+
+    /**
+     * 多轮对话 —— POST /api/chat/multi-turn。
+     * <p>
+     * 这是 Day 4 的核心端点：通过 {@code conversationId} 关联对话历史，
+     * {@link org.springframework.ai.chat.client.advisor.MessageChatMemoryAdvisor}
+     * 自动在请求前注入历史消息、响应后保存新消息。
+     * <p>
+     * <b>使用方式</b>：
+     * <pre>{@code
+     * // 第 1 轮 —— 告诉 AI 你的名字
+     * POST /api/chat/multi-turn
+     * {"conversationId": "conv-001", "message": "我叫张三"}
+     *
+     * // 第 2 轮 —— AI 能记住你的名字
+     * POST /api/chat/multi-turn
+     * {"conversationId": "conv-001", "message": "我叫什么名字？"}
+     * // → "你叫张三"（AI 记住了！）
+     *
+     * // 第 3 轮 —— 换个 conversationId 就"失忆"了
+     * POST /api/chat/multi-turn
+     * {"conversationId": "conv-002", "message": "我叫什么名字？"}
+     * // → "我不知道你的名字"（新会话，无历史）
+     * }</pre>
+     * <p>
+     * <b>与 Day 1-3 端点的关系</b>：
+     * <ul>
+     *   <li>{@code POST /api/chat} —— 同步单轮（无记忆）</li>
+     *   <li>{@code GET /api/chat/stream} —— 流式单轮（无记忆）</li>
+     *   <li>{@code POST /api/chat/multi-turn} —— 同步多轮（有记忆 ✅）</li>
+     * </ul>
+     *
+     * @param request 包含 conversationId 和 message 的请求体
+     * @return LLM 的完整回复（已考虑历史上下文）
+     */
+    @PostMapping("/chat/multi-turn")
+    @Operation(summary = "多轮对话", description = "携带对话历史的多轮对话，AI 能记住之前的上下文")
+    public ApiResponse<String> chatMultiTurn(@Valid @RequestBody ChatMultiTurnRequest request) {
+        String reply = chatService.chatMultiTurn(request.conversationId(), request.message());
+        return ApiResponse.success(reply);
     }
 }
