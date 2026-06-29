@@ -5,6 +5,8 @@ import com.example.notes_api.dto.ChatCostResponse;
 import com.example.notes_api.dto.ChatMultiTurnRequest;
 import com.example.notes_api.dto.ChatRequest;
 import com.example.notes_api.dto.SlugRequest;
+import com.example.notes_api.dto.SmartNoteRequest;
+import com.example.notes_api.dto.SmartNoteResponse;
 import com.example.notes_api.dto.SummarizeRequest;
 import com.example.notes_api.dto.TranslateRequest;
 import com.example.notes_api.service.ChatService;
@@ -226,6 +228,66 @@ public class ChatController {
             description = "返回 AI 回复 + Token 用量（输入/输出/总量），用于成本追踪与监控")
     public ApiResponse<ChatCostResponse> chatWithCost(@Valid @RequestBody ChatRequest request) {
         ChatCostResponse response = chatService.chatWithCost(request.message());
+        return ApiResponse.success(response);
+    }
+
+    // ================================================================
+    // Day 6 新增端点：智能笔记发布助手（综合实战）
+    // ================================================================
+
+    /**
+     * 智能笔记发布助手 —— POST /api/chat/smart-note。
+     * <p>
+     * 这是 Day 6 综合实战的核心端点：输入原始笔记内容，AI 自动完成
+     * <b>标题生成 → 摘要提取 → 英文翻译</b> 三步流水线，返回聚合结果 + Token 成本。
+     * <p>
+     * <b>与 Day 1-5 端点的关系</b>：
+     * <ul>
+     *   <li>{@code POST /api/chat} —— 基础对话（Day 1）</li>
+     *   <li>{@code POST /api/chat/translate / summarize / slug} —— 单功能调用（Day 2）</li>
+     *   <li>{@code GET /api/chat/stream} —— 流式对话（Day 3）</li>
+     *   <li>{@code POST /api/chat/multi-turn} —— 多轮对话（Day 4）</li>
+     *   <li>{@code POST /api/chat/with-cost} —— 带成本追踪的单次对话（Day 5）</li>
+     *   <li><b>{@code POST /api/chat/smart-note} —— 多步 AI 流水线 + Token 聚合（Day 6）</b> 🆕</li>
+     * </ul>
+     * <p>
+     * <b>请求示例</b>：
+     * <pre>{@code
+     * {
+     *   "content": "Spring AI 是 Spring 生态的 AI 框架，它把 LLM 调用封装成普通 Bean，
+     *              支持 ChatClient、Embedding、VectorStore、Tool Calling 等能力..."
+     * }
+     * }</pre>
+     * <p>
+     * <b>响应示例</b>：
+     * <pre>{@code
+     * {
+     *   "code": 200,
+     *   "message": "success",
+     *   "data": {
+     *     "title": "Spring AI：把大模型变成 Spring Bean",
+     *     "summary": "Spring AI 将 LLM 封装为 Spring Bean，提供 ChatClient 等核心能力...",
+     *     "translation": "Spring AI is the AI framework in the Spring ecosystem...",
+     *     "tokens": {
+     *       "inputTokens": 450,
+     *       "outputTokens": 150,
+     *       "totalTokens": 600
+     *     }
+     *   }
+     * }
+     * }</pre>
+     * <p>
+     * <b>Token 聚合逻辑</b>：{@code total = step1 + step2 + step3}，
+     * 详见 {@link com.example.notes_api.service.ChatService#smartNote(String)}。
+     *
+     * @param request 包含原始笔记内容的请求体
+     * @return 包含标题、摘要、翻译和聚合 Token 用量的响应
+     */
+    @PostMapping("/chat/smart-note")
+    @Operation(summary = "智能笔记发布助手",
+            description = "输入原始内容，AI 自动生成标题 + 摘要 + 英文翻译（多步流水线 + Token 聚合）")
+    public ApiResponse<SmartNoteResponse> smartNote(@Valid @RequestBody SmartNoteRequest request) {
+        SmartNoteResponse response = chatService.smartNote(request.content());
         return ApiResponse.success(response);
     }
 }

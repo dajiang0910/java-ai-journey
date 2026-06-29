@@ -1,6 +1,7 @@
 package com.example.notes_api.service;
 
 import com.example.notes_api.dto.ChatCostResponse;
+import com.example.notes_api.dto.SmartNoteResponse;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.client.advisor.MessageChatMemoryAdvisor;
 import org.springframework.ai.chat.memory.ChatMemory;
@@ -275,6 +276,123 @@ public class ChatService {
                         usage.getCompletionTokens(),   // 输出 Token 数
                         usage.getTotalTokens()         // 总 Token 数
                 )
+        );
+    }
+
+    // ================================================================
+    // Day 6 新增方法：智能笔记发布助手（综合实战）
+    // ================================================================
+
+    /**
+     * 智能笔记发布助手 —— 输入原始内容，AI 自动生成标题 + 摘要 + 英文翻译。
+     * <p>
+     * <b>Day 6 核心：多步 AI 调用链 + Token 成本聚合</b>
+     * <p>
+     * 内部执行 3 次 LLM 调用（串行），每一步：
+     * <ul>
+     *   <li>使用 {@code .chatClientResponse()} 获取完整响应（含 Token 用量）</li>
+     *   <li>有独立的 System 角色约束（标题专家 / 摘要专家 / 翻译专家）</li>
+     *   <li>受 {@code application.properties} 中的超时 + 重试配置保护</li>
+     * </ul>
+     * 三步完成后，累加所有 Token 用量，返回聚合结果。
+     * <p>
+     * <b>设计原则：串行 vs 并行</b>
+     * <ul>
+     *   <li>Step 1（标题）→ 独立，不依赖其他步骤</li>
+     *   <li>Step 2（摘要）→ 独立，不依赖其他步骤</li>
+     *   <li>Step 3（翻译）→ 独立，不依赖其他步骤</li>
+     * </ul>
+     * 三个步骤互不依赖，<b>理论上可以并行调用</b>（用 CompletableFuture），
+     * 但 Day 6 先做串行版本以展示 "Token 累加" 的完整链路。
+     * 并行优化作为扩展练习（见块 1 设计图）。
+     * <p>
+     * <b>Token 聚合公式</b>：
+     * <pre>
+     * totalInput  = input_step1  + input_step2  + input_step3
+     * totalOutput = output_step1 + output_step2 + output_step3
+     * totalTokens = total_step1  + total_step2  + total_step3
+     * </pre>
+     * <p>
+     * <b>成本速算</b>（百炼 qwen-turbo）：
+     * <pre>
+     * 假设每步 ~300 input + ~100 output = ~400 tokens
+     * 3 步 ≈ 1200 tokens → 约 ¥0.0005
+     * </pre>
+     *
+     * @param content 原始笔记内容
+     * @return 包含标题、摘要、翻译和聚合 Token 用量的响应
+     */
+    public SmartNoteResponse smartNote(String content) {
+        int totalInput = 0;
+        int totalOutput = 0;
+        int totalTokens = 0;
+
+        // ================================================================
+        // Step 1: 生成标题 —— System 角色约束为"标题专家"
+        // ================================================================
+        var titleResponse = chatClient.prompt()
+                .system("你是一个专业的标题撰写专家。你的任务是根据内容生成一个简洁、准确的标题（不超过 30 字）。只返回标题本身，不要加任何前缀、引号或解释。")
+                .user("请为以下内容生成标题：\n\n" + content)
+                .call()
+                .chatClientResponse();
+
+        String title = titleResponse.chatResponse().getResult().getOutput().getText().trim();
+        var titleUsage = titleResponse.chatResponse().getMetadata().getUsage();
+        totalInput += titleUsage.getPromptTokens();
+        totalOutput += titleUsage.getCompletionTokens();
+        totalTokens += titleUsage.getTotalTokens();
+
+        // ================================================================
+        // Step 2: 生成摘要 —— PromptTemplate 模板化（复用 Day 2 模式）
+        // ================================================================
+        PromptTemplate summaryTemplate = new PromptTemplate("""
+                请为以下内容生成摘要，要求：
+                1. 不超过 {maxWords} 字
+                2. 保留核心要点，去掉冗余描述
+                3. 用中文输出
+                4. 只返回摘要本身，不要加任何前缀或解释
+
+                内容：
+                {content}
+                """);
+        summaryTemplate.add("maxWords", 100);
+        summaryTemplate.add("content", content);
+
+        var summaryResponse = chatClient.prompt()
+                .system("你是一个专业的内容摘要专家，擅长提炼核心信息。")
+                .user(summaryTemplate.render())
+                .call()
+                .chatClientResponse();
+
+        String summary = summaryResponse.chatResponse().getResult().getOutput().getText().trim();
+        var summaryUsage = summaryResponse.chatResponse().getMetadata().getUsage();
+        totalInput += summaryUsage.getPromptTokens();
+        totalOutput += summaryUsage.getCompletionTokens();
+        totalTokens += summaryUsage.getTotalTokens();
+
+        // ================================================================
+        // Step 3: 英文翻译 —— System 角色约束为"翻译专家"
+        // ================================================================
+        var translateResponse = chatClient.prompt()
+                .system("你是一个专业的翻译助手。请将用户提供的中文内容翻译成英文。只返回翻译结果，不要添加任何解释、注释或额外信息。")
+                .user(content)
+                .call()
+                .chatClientResponse();
+
+        String translation = translateResponse.chatResponse().getResult().getOutput().getText().trim();
+        var translateUsage = translateResponse.chatResponse().getMetadata().getUsage();
+        totalInput += translateUsage.getPromptTokens();
+        totalOutput += translateUsage.getCompletionTokens();
+        totalTokens += translateUsage.getTotalTokens();
+
+        // ================================================================
+        // 聚合返回
+        // ================================================================
+        return new SmartNoteResponse(
+                title,
+                summary,
+                translation,
+                new ChatCostResponse.TokenUsage(totalInput, totalOutput, totalTokens)
         );
     }
 }
