@@ -1,15 +1,8 @@
 package com.example.notes_api.controller;
 
-import com.example.notes_api.dto.ApiResponse;
-import com.example.notes_api.dto.ChatCostResponse;
-import com.example.notes_api.dto.ChatMultiTurnRequest;
-import com.example.notes_api.dto.ChatRequest;
-import com.example.notes_api.dto.SlugRequest;
-import com.example.notes_api.dto.SmartNoteRequest;
-import com.example.notes_api.dto.SmartNoteResponse;
-import com.example.notes_api.dto.SummarizeRequest;
-import com.example.notes_api.dto.TranslateRequest;
+import com.example.notes_api.dto.*;
 import com.example.notes_api.service.ChatService;
+import com.example.notes_api.service.StructuredExtractService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -35,8 +28,12 @@ public class ChatController {
 
     private final ChatService chatService;
 
-    public ChatController(ChatService chatService) {
+    private final StructuredExtractService extractService;
+
+    // 修改构造器，新增 StructuredExtractService 参数
+    public ChatController(ChatService chatService, StructuredExtractService extractService) {
         this.chatService = chatService;
+        this.extractService = extractService;
     }
 
     /**
@@ -289,5 +286,16 @@ public class ChatController {
     public ApiResponse<SmartNoteResponse> smartNote(@Valid @RequestBody SmartNoteRequest request) {
         SmartNoteResponse response = chatService.smartNote(request.content());
         return ApiResponse.success(response);
+    }
+
+    // ================================================================
+    // Week 4 Day 1：结构化提取
+    // ================================================================
+
+    @PostMapping("/extract/metadata")
+    @Operation(summary = "结构化提取元数据",
+            description = "输入文本，AI 自动提取标题/关键词/分类/难度/摘要，返回结构化 Bean")
+    public ApiResponse<NoteMetadata> extractMetadata(@Valid @RequestBody ExtractRequest request) {
+        return ApiResponse.success(extractService.extract(request.content()));
     }
 }

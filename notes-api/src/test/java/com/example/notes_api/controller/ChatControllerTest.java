@@ -1,8 +1,10 @@
 package com.example.notes_api.controller;
 
 import com.example.notes_api.dto.ChatCostResponse;
+import com.example.notes_api.dto.NoteMetadata;
 import com.example.notes_api.dto.SmartNoteResponse;
 import com.example.notes_api.service.ChatService;
+import com.example.notes_api.service.StructuredExtractService;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -11,6 +13,8 @@ import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import reactor.core.publisher.Flux;
+
+import java.util.List;
 
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -39,6 +43,9 @@ class ChatControllerTest {
 
     @MockitoBean
     ChatService chatService;
+
+    @MockitoBean
+    StructuredExtractService extractService;
 
     // ================================================================
     // Day 1: POST /api/chat —— 基础同步对话
@@ -243,6 +250,50 @@ class ChatControllerTest {
     @DisplayName("POST /api/chat/smart-note 内容为空应返回 400")
     void smartNote_withBlankContent_shouldReturn400() throws Exception {
         mockMvc.perform(post("/api/chat/smart-note")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"content": ""}
+                                """))
+                .andExpect(status().isBadRequest());
+    }
+
+    // ================================================================
+    // Week 4 Day 1: POST /api/extract/metadata —— 结构化提取
+    // ================================================================
+
+    @Test
+    @DisplayName("POST /api/extract/metadata 应返回结构化 NoteMetadata")
+    void extractMetadata_shouldReturnStructuredBean() throws Exception {
+        NoteMetadata mockMeta = new NoteMetadata(
+                "Spring AI 入门指南",
+                List.of("Spring AI", "LLM", "ChatClient"),
+                "技术",
+                "入门",
+                "Spring AI 将 LLM 封装为 Spring Bean"
+        );
+        when(extractService.extract("Spring AI 是 Spring 生态的 AI 框架..."))
+                .thenReturn(mockMeta);
+
+        mockMvc.perform(post("/api/extract/metadata")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"content": "Spring AI 是 Spring 生态的 AI 框架..."}
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value(200))
+                .andExpect(jsonPath("$.data.title").value("Spring AI 入门指南"))
+                .andExpect(jsonPath("$.data.keywords[0]").value("Spring AI"))
+                .andExpect(jsonPath("$.data.keywords[1]").value("LLM"))
+                .andExpect(jsonPath("$.data.keywords[2]").value("ChatClient"))
+                .andExpect(jsonPath("$.data.category").value("技术"))
+                .andExpect(jsonPath("$.data.difficulty").value("入门"))
+                .andExpect(jsonPath("$.data.summary").value("Spring AI 将 LLM 封装为 Spring Bean"));
+    }
+
+    @Test
+    @DisplayName("POST /api/extract/metadata 内容为空应返回 400")
+    void extractMetadata_withBlankContent_shouldReturn400() throws Exception {
+        mockMvc.perform(post("/api/extract/metadata")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"content": ""}
