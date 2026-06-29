@@ -1,6 +1,7 @@
 package com.example.notes_api.controller;
 
 import com.example.notes_api.dto.ApiResponse;
+import com.example.notes_api.dto.ChatCostResponse;
 import com.example.notes_api.dto.ChatMultiTurnRequest;
 import com.example.notes_api.dto.ChatRequest;
 import com.example.notes_api.dto.SlugRequest;
@@ -177,5 +178,54 @@ public class ChatController {
     public ApiResponse<String> chatMultiTurn(@Valid @RequestBody ChatMultiTurnRequest request) {
         String reply = chatService.chatMultiTurn(request.conversationId(), request.message());
         return ApiResponse.success(reply);
+    }
+
+    // ================================================================
+    // Day 5 新增端点：带 Token 成本信息的对话
+    // ================================================================
+
+    /**
+     * 带 Token 成本信息的同步对话 —— POST /api/chat/with-cost。
+     * <p>
+     * 这是 Day 5 的核心端点：相比 {@code POST /api/chat}（只返回纯文本），
+     * 额外返回每次调用的 Token 用量（输入/输出/总量），让调用方能感知 LLM 成本。
+     * <p>
+     * <b>请求</b>：{@code {"message": "用一句话介绍 Java"}}
+     * <p>
+     * <b>响应</b>：
+     * <pre>{@code
+     * {
+     *   "code": 200,
+     *   "message": "success",
+     *   "data": {
+     *     "reply": "Java 是一种面向对象的编程语言...",
+     *     "tokens": {
+     *       "inputTokens": 150,
+     *       "outputTokens": 80,
+     *       "totalTokens": 230
+     *     }
+     *   }
+     * }
+     * }</pre>
+     * <p>
+     * <b>与 Day 1 端点的关系</b>：
+     * <ul>
+     *   <li>{@code POST /api/chat} —— 只返回文本（简单场景）</li>
+     *   <li>{@code POST /api/chat/with-cost} —— 返回文本 + Token 用量（成本追踪）</li>
+     * </ul>
+     * <p>
+     * <b>底层实现</b>：ChatService 使用 {@code .chatClientResponse()} 而非 {@code .content()}，
+     * 从 {@link org.springframework.ai.chat.model.ChatResponse#getMetadata()} 中提取
+     * {@link org.springframework.ai.chat.metadata.Usage} 得到 Token 统计。
+     *
+     * @param request 包含 message 的请求体（复用 Day 1 的 ChatRequest）
+     * @return 包含回复文本和 Token 用量的响应
+     */
+    @PostMapping("/chat/with-cost")
+    @Operation(summary = "带 Token 成本的同步对话",
+            description = "返回 AI 回复 + Token 用量（输入/输出/总量），用于成本追踪与监控")
+    public ApiResponse<ChatCostResponse> chatWithCost(@Valid @RequestBody ChatRequest request) {
+        ChatCostResponse response = chatService.chatWithCost(request.message());
+        return ApiResponse.success(response);
     }
 }

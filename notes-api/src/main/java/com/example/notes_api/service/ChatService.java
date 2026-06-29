@@ -1,5 +1,6 @@
 package com.example.notes_api.service;
 
+import com.example.notes_api.dto.ChatCostResponse;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.client.advisor.MessageChatMemoryAdvisor;
 import org.springframework.ai.chat.memory.ChatMemory;
@@ -211,5 +212,69 @@ public class ChatService {
                 .user(userMessage)
                 .call()
                 .content();
+    }
+
+    // ================================================================
+    // Day 5 新增方法
+    // ================================================================
+
+    /**
+     * 带 Token 成本信息的同步对话。
+     * <p>
+     * <b>Day 5 核心认知</b>：LLM 调用不只是拿到回复文本，还要知道"花了多少 Token"。
+     * <p>
+     * <b>关键区别</b>：不使用 {@code .content()}（只拿文本），
+     * 而是用 {@code .chatClientResponse()} 拿到完整响应对象，
+     * 从中提取回复文本 <b>和</b> Token 用量元数据。
+     * <p>
+     * <b>调用链</b>：
+     * <pre>
+     * .call().chatClientResponse()         → ChatClientResponse    （包装对象，含 ChatResponse + 上下文 Map）
+     *   .chatResponse()                    → ChatResponse          （模型响应）
+     *     .getResult().getOutput()         → AssistantMessage      （AI 回复消息对象）
+     *       .getText()                     → String                （回复纯文本）
+     *     .getMetadata().getUsage()        → Usage                 （Token 用量接口）
+     *       .getPromptTokens()             → Integer               （输入 Token 数）
+     *       .getCompletionTokens()         → Integer               （输出 Token 数）
+     *       .getTotalTokens()              → Integer               （总 Token 数）
+     * </pre>
+     * <p>
+     * <b>对比 .content() 和 .chatClientResponse()</b>：
+     * <ul>
+     *   <li>{@code .content()} —— 快捷方式，只拿文本。适合不关心 Token 成本的场景</li>
+     *   <li>{@code .chatClientResponse()} —— 完整响应，能拿到 Token 用量、限流信息、模型名称等</li>
+     * </ul>
+     * <p>
+     * <b>百炼 qwen-turbo 定价参考</b>（2025）：
+     * <ul>
+     *   <li>输入：¥0.0005 / 1K tokens</li>
+     *   <li>输出：¥0.001 / 1K tokens</li>
+     * </ul>
+     * 一次典型对话（~500 input + ~200 output = 700 tokens）成本约 ¥0.00045。
+     *
+     * @param userMessage 用户输入的消息
+     * @return 包含回复文本和 Token 用量的响应
+     * @see org.springframework.ai.chat.metadata.Usage
+     * @see org.springframework.ai.chat.model.ChatResponse
+     */
+    public ChatCostResponse chatWithCost(String userMessage) {
+        // 获取完整响应（不使用 .content() 快捷方法）
+        var clientResponse = chatClient.prompt()
+                .user(userMessage)
+                .call()
+                .chatClientResponse();   // Day 5 核心：拿到 ChatClientResponse（含 ChatResponse + 上下文）
+
+        var chatResponse = clientResponse.chatResponse();
+        String reply = chatResponse.getResult().getOutput().getText();
+        var usage = chatResponse.getMetadata().getUsage();
+
+        return new ChatCostResponse(
+                reply,
+                new ChatCostResponse.TokenUsage(
+                        usage.getPromptTokens(),       // 输入 Token 数
+                        usage.getCompletionTokens(),   // 输出 Token 数
+                        usage.getTotalTokens()         // 总 Token 数
+                )
+        );
     }
 }
