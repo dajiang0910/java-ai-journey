@@ -20,6 +20,7 @@ import java.io.InputStream;
  * 文档上传 → {@link #parse(InputStream, String)} → 纯文本 → {@link StructuredExtractService#extractV2(String)} → 结构化元数据
  *
  * @see StructuredExtractService 下游：结构化提取服务
+ * @see DocumentAnalysisService 下游：智能分析服务（Day 5）
  */
 @Service
 public class DocumentParseService {
@@ -40,6 +41,15 @@ public class DocumentParseService {
     }
 
     /**
+     * 解析结果 —— 包含纯文本 + Tika 检测到的 MIME 类型（Day 5 新增，供 analyze 使用）。
+     */
+    public record ParseResult(String text, String detectedMimeType) {}
+
+    // ================================================================
+    // 公开 API
+    // ================================================================
+
+    /**
      * 解析文档内容为纯文本。
      * <p>
      * Tika 内部做三件事：
@@ -56,11 +66,18 @@ public class DocumentParseService {
      * @throws IOException 如果文件无法解析
      */
     public String parse(InputStream inputStream, String originalFilename) throws IOException {
+        return parseWithMetadata(inputStream, originalFilename).text();
+    }
+
+    /**
+     * 解析文档并返回文本 + 检测到的 MIME 类型（Day 5 新增）。
+     * <p>
+     * 相比 {@link #parse(InputStream, String)}，额外返回 Tika 检测到的 Content-Type，
+     * 供下游 {@link DocumentAnalysisService} 使用。
+     */
+    public ParseResult parseWithMetadata(InputStream inputStream, String originalFilename) throws IOException {
         log.info("开始解析文档：{}", originalFilename);
 
-        // 用 Metadata 传给 Tika，让它一次性完成"格式检测 + 文本提取"
-        // 注意：不能先 detect() 再 parseToString() —— detect() 会消费 InputStream，
-        // 后续解析就读不到完整内容了。正确做法是传 Metadata 带文件名提示，一次调用搞定。
         Metadata metadata = new Metadata();
         metadata.set("resourceName", originalFilename);
 
@@ -71,17 +88,15 @@ public class DocumentParseService {
             throw new IOException("Tika 解析失败：" + originalFilename, e);
         }
 
-        // 解析完成后 Metadata 里才有 Content-Type
         String detectedType = metadata.get("Content-Type");
         log.info("检测到文件类型：{}（文件：{}）", detectedType, originalFilename);
-
         log.info("解析完成：{}，提取文本长度：{} 字符", originalFilename, text.length());
 
         if (text.isBlank()) {
             log.warn("警告：{} 解析结果为空，可能文件无文本内容或为纯图片 PDF", originalFilename);
         }
 
-        return text;
+        return new ParseResult(text, detectedType != null ? detectedType : "unknown");
     }
 
     /**

@@ -1,8 +1,10 @@
 package com.example.notes_api.controller;
 
 import com.example.notes_api.dto.ApiResponse;
+import com.example.notes_api.dto.DocumentAnalysisResponse;
 import com.example.notes_api.dto.DocumentParseResponse;
 import com.example.notes_api.dto.NoteMetadata;
+import com.example.notes_api.service.DocumentAnalysisService;
 import com.example.notes_api.service.DocumentParseService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -45,9 +47,11 @@ public class DocumentController {
     private static final long MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
 
     private final DocumentParseService parseService;
+    private final DocumentAnalysisService analysisService;
 
-    public DocumentController(DocumentParseService parseService) {
+    public DocumentController(DocumentParseService parseService, DocumentAnalysisService analysisService) {
         this.parseService = parseService;
+        this.analysisService = analysisService;
     }
 
     /**
@@ -176,5 +180,80 @@ public class DocumentController {
                 file.getOriginalFilename(), metadata.title(), metadata.category());
 
         return ApiResponse.success(metadata);
+    }
+
+    /**
+     * 上传文档 → Tika 解析 → AI 智能分析（Week 4 收网端点）。
+     * <p>
+     * 相比 {@code /parse-and-extract}，本端点额外输出：
+     * <ul>
+     *   <li><b>文本统计</b>：字符数/句子数/段落数/预估阅读时间（程序计算，零 AI 成本）</li>
+     *   <li><b>关键句</b>：AI 从全文提炼 3-5 句最关键的原文句子</li>
+     *   <li><b>Advisor 观测</b>：SimpleLoggerAdvisor 记录 LLM 调用日志</li>
+     * </ul>
+     * <p>
+     * <b>管线架构（四段）：</b>
+     * <pre>
+     * MultipartFile → Tika 解析 → 文本统计（纯计算）
+     *                          → AI 元数据提取（extractV2）
+     *                          → AI 关键句提炼（带 Advisor）
+     *                          → 组装 DocumentAnalysisResponse
+     * </pre>
+     *
+     * @param file 上传的文件（multipart/form-data，字段名 "file"，最大 10 MB）
+     * @return 综合分析结果（元数据 + 文本统计 + 关键句 + 阅读时间）
+     */
+    @PostMapping(value = "/analyze", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @Operation(
+            summary = "文档智能分析（Week 4 收网端点）",
+            description = """
+                    <h3>Week 4 综合端点：上传文档 → 完整智能分析</h3>
+                    <p>包含四段管线：</p>
+                    <ol>
+                      <li><b>Tika 解析</b>：自动检测格式，提取纯文本</li>
+                      <li><b>文本统计</b>：字符数/句子数/段落数/预估阅读时间</li>
+                      <li><b>AI 元数据提取</b>：title/keywords/category/difficulty/summary</li>
+                      <li><b>AI 关键句提炼</b>：从全文提取 3-5 句最关键的原文句子</li>
+                    </ol>
+                    <p>首次引入 <b>SimpleLoggerAdvisor</b>：开启 DEBUG 日志后可观测
+                    每次 LLM 调用的完整 request/response。</p>
+                    """,
+            operationId = "analyzeDocument"
+    )
+    @io.swagger.v3.oas.annotations.responses.ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "分析成功",
+                    content = @Content(schema = @Schema(implementation = DocumentAnalysisResponse.class))),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "文件为空"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "413", description = "文件大小超限（>10 MB）"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "500", description = "解析或分析失败")
+    })
+    public ApiResponse<DocumentAnalysisResponse> analyze(
+            @Parameter(description = "要分析的文件（PDF/Word/Markdown/HTML/TXT 等），最大 10 MB",
+                    required = true)
+            @RequestParam("file") MultipartFile file) throws IOException {
+
+        log.info("收到文档智能分析请求：{}（大小：{} bytes）", file.getOriginalFilename(), file.getSize());
+
+        if (file.isEmpty()) {
+            return ApiResponse.error(400, "文件为空，请上传有效文件");
+        }
+        if (file.getSize() > MAX_FILE_SIZE) {
+            return ApiResponse.error(413,
+                    String.format("文件大小超过上限（%d MB），请压缩后重试", MAX_FILE_SIZE / 1024 / 1024));
+        }
+
+        // 解析文档（拿到文本 + MIME 类型）
+        DocumentParseService.ParseResult parseResult = parseService.parseWithMetadata(
+                file.getInputStream(), file.getOriginalFilename());
+
+        // 智能分析（文本统计 + AI 元数据 + AI 关键句）
+        DocumentAnalysisResponse analysis = analysisService.analyze(
+                parseResult.text(), file.getOriginalFilename(), parseResult.detectedMimeType());
+
+        log.info("智能分析完成：{} → title={}, 关键句数={}, 阅读时间={}",
+                file.getOriginalFilename(), analysis.metadata().title(),
+                analysis.keySentences().size(), analysis.readingTime());
+
+        return ApiResponse.success(analysis);
     }
 }
