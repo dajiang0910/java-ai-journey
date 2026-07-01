@@ -93,6 +93,34 @@
 			<version>2.0.0</version>
 		</dependency>
 
+		<!-- ============================================ -->
+		<!-- Week 5 Day 2: Redis Stack 向量存储 -->
+		<!-- ============================================ -->
+
+		<!-- Spring AI Redis Vector Store（自动配置 RedisVectorStore Bean） -->
+		<dependency>
+			<groupId>org.springframework.ai</groupId>
+			<artifactId>spring-ai-starter-vector-store-redis</artifactId>
+			<version>2.0.0</version>
+		</dependency>
+
+		<!-- Spring Data Redis（Jedis 客户端 — RedisVectorStore 需要 JedisConnectionFactory） -->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-data-redis</artifactId>
+			<exclusions>
+				<!-- 排除 Lettuce，用 Jedis（Spring AI 2.0.0 RedisVectorStoreAutoConfiguration 绑定 JedisConnectionFactory） -->
+				<exclusion>
+					<groupId>io.lettuce</groupId>
+					<artifactId>lettuce-core</artifactId>
+				</exclusion>
+			</exclusions>
+		</dependency>
+		<dependency>
+			<groupId>redis.clients</groupId>
+			<artifactId>jedis</artifactId>
+		</dependency>
+
 		<!-- Apache Tika：统一文档解析门面（PDF/Word/Markdown/HTML 等 1000+ 格式 → 纯文本） -->
 		<dependency>
 			<groupId>org.apache.tika</groupId>
